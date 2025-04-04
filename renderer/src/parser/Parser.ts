@@ -36,6 +36,7 @@ import {
   isModInfoLine,
   groupLinesByMod,
   parseModInfoLine,
+  ADDED_RUNE_LINE,
 } from "./advanced-mod-desc";
 import { calcPropPercentile, QUALITY_STATS } from "./calc-q20";
 import { getMaxTier } from "./mod-tiers";
@@ -75,7 +76,8 @@ const parsers: Array<ParserFn | { virtual: VirtualParserFn }> = [
   parseCharmSlots,
   parseSpirit,
   parsePriceNote,
-  parseHelpText,
+  parseUnneededText,
+  parseTimelostRadius,
   parseStackSize,
   parseCorrupted,
   parseFoil,
@@ -898,7 +900,8 @@ export function parseModifiersPoe2(section: string[], item: ParsedItem) {
     (line) =>
       line.endsWith(ENCHANT_LINE) ||
       line.endsWith(SCOURGE_LINE) ||
-      line.endsWith(RUNE_LINE),
+      line.endsWith(RUNE_LINE) ||
+      line.endsWith(ADDED_RUNE_LINE),
   );
 
   if (enchantOrScourgeOrRune) {
@@ -908,7 +911,9 @@ export function parseModifiersPoe2(section: string[], item: ParsedItem) {
         ? ModifierType.Enchant
         : enchantOrScourgeOrRune.endsWith(SCOURGE_LINE)
           ? ModifierType.Scourge
-          : ModifierType.Rune,
+          : enchantOrScourgeOrRune.endsWith(ADDED_RUNE_LINE)
+            ? ModifierType.AddedRune
+            : ModifierType.Rune,
       tags: [],
     };
     foundAnyMods = parseStatsFromMod(lines, item, { info: modInfo, stats: [] });
@@ -951,6 +956,7 @@ function parseModifiers(section: string[], item: ParsedItem) {
     (line) =>
       line.endsWith(ENCHANT_LINE) ||
       line.endsWith(SCOURGE_LINE) ||
+      line.endsWith(RUNE_LINE) ||
       isModInfoLine(line),
   );
 
@@ -989,7 +995,9 @@ function parseModifiers(section: string[], item: ParsedItem) {
     const modInfo: ModifierInfo = {
       type: recognizedLine.endsWith(ENCHANT_LINE)
         ? ModifierType.Enchant
-        : ModifierType.Scourge,
+        : recognizedLine.endsWith(SCOURGE_LINE)
+          ? ModifierType.Scourge
+          : ModifierType.Rune,
       tags: [],
     };
     parseStatsFromMod(lines, item, { info: modInfo, stats: [] });
@@ -1121,7 +1129,7 @@ function parsePriceNote(section: string[], item: ParsedItem) {
   return isParsed;
 }
 
-function parseHelpText(section: string[], item: ParsedItem) {
+function parseUnneededText(section: string[], item: ParsedItem) {
   if (
     item.category !== ItemCategory.Quiver &&
     item.category !== ItemCategory.Flask &&
@@ -1132,7 +1140,11 @@ function parseHelpText(section: string[], item: ParsedItem) {
     item.category !== ItemCategory.Relic &&
     item.category !== ItemCategory.Tablet &&
     item.category !== ItemCategory.TowerAugment &&
-    item.info.refName !== "Expedition Logbook"
+    item.info.refName !== "Expedition Logbook" &&
+    item.category !== ItemCategory.Sceptre &&
+    item.category !== ItemCategory.Wand &&
+    item.category !== ItemCategory.Staff &&
+    item.category !== ItemCategory.Shield
   )
     return "PARSER_SKIPPED";
 
@@ -1145,8 +1157,18 @@ function parseHelpText(section: string[], item: ParsedItem) {
       line.startsWith(_$.JEWEL_HELP) ||
       line.startsWith(_$.SANCTUM_HELP) ||
       line.startsWith(_$.PRECURSOR_TABLET_HELP) ||
-      line.startsWith(_$.LOGBOOK_HELP)
+      line.startsWith(_$.LOGBOOK_HELP) ||
+      line.startsWith(_$.GRANTS_SKILL)
     ) {
+      return "SECTION_PARSED";
+    }
+  }
+  return "SECTION_SKIPPED";
+}
+function parseTimelostRadius(section: string[], item: ParsedItem) {
+  if (item.category !== ItemCategory.Jewel) return "PARSER_SKIPPED";
+  for (const line of section) {
+    if (line.startsWith(_$.TIMELESS_RADIUS)) {
       return "SECTION_PARSED";
     }
   }
@@ -1395,7 +1417,6 @@ function parseStatsFromMod(
   item.newMods.push(modifier);
 
   if (modifier.info.type === ModifierType.Veiled) {
-    console.log("mod name:", modifier.info.name);
     const found = STAT_BY_MATCH_STR(modifier.info.name!);
     if (found) {
       modifier.stats.push({
