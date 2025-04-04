@@ -21,7 +21,7 @@ if (!app.requestSingleInstanceLock()) {
   app.exit();
 }
 
-if (process.platform !== "darwin") {
+if (process.platform !== "darwin" || true) {
   app.disableHardwareAcceleration();
 }
 app.enableSandbox();
