@@ -11,12 +11,39 @@
       v-if="!isBrowserShown"
       class="layout-column shrink-0"
       style="width: var(--game-panel)"
-    ></div>
+    >
+      <div
+        class="flex"
+        :class="{
+          'flex-row': clickPosition === 'inventory',
+          'flex-row-reverse': clickPosition === 'stash',
+        }"
+      >
+        <item-editor
+          v-if="itemEditorAvailable && !openItemEditorAbove && item?.isOk()"
+          class="pointer-events-auto"
+          :item="item.value"
+          :click-position="clickPosition"
+          :item-editor-options="itemEditorOptions"
+        />
+      </div>
+    </div>
     <div
       id="price-window"
       class="layout-column shrink-0 text-gray-200 pointer-events-auto"
       style="width: 28.75rem"
     >
+      <item-editor
+        v-if="
+          itemEditorAvailable &&
+          (isBrowserShown || openItemEditorAbove) &&
+          item?.isOk()
+        "
+        class="pointer-events-auto"
+        :item="item.value"
+        :click-position="clickPosition"
+        :item-editor-options="itemEditorOptions"
+      />
       <AppTitleBar
         @close="closePriceCheck"
         @click="openLeagueSelection"
@@ -77,8 +104,8 @@
             v-if="isLeagueSelected"
             :item="item.value"
             :advanced-check="advancedCheck"
-            :change-item="changeItem"
             :rebuild-key="rebuildKey"
+            @item-editor-selection="handleItemEditorSelection"
           />
         </template>
         <div v-if="isBrowserShown" class="bg-gray-900 px-6 py-2 truncate">
@@ -105,12 +132,12 @@
           'flex-row-reverse': clickPosition === 'inventory',
         }"
       >
-        <related-items
+        <!-- <related-items
           v-if="item?.isOk()"
           class="pointer-events-auto"
           :item="item.value"
           :click-position="clickPosition"
-        />
+        /> -->
         <rate-limiter-state class="pointer-events-auto" />
       </div>
     </div>
@@ -127,6 +154,7 @@ import {
   computed,
   nextTick,
   provide,
+  ref,
 } from "vue";
 import { Result, ok, err } from "neverthrow";
 import { useI18n } from "vue-i18n";
@@ -150,6 +178,11 @@ import {
   WidgetManager,
   WidgetSpec,
 } from "../overlay/interfaces";
+import ItemEditor from "./filters/ItemEditor.vue";
+import { HIGH_VALUE_RUNES_HARDCODED, loadUltraLateItems } from "@/assets/data";
+import { refEffectsPseudos } from "./filters/pseudo";
+import { ItemEditorType } from "@/parser/meta";
+import { getItemEditorType } from "./filters/util";
 
 type ParseError = {
   name: string;
@@ -192,6 +225,7 @@ export default defineComponent({
         tierNumbering: "poe2",
         alwaysShowTier: false,
         rememberRatio: false,
+        openItemEditorAbove: false,
       };
     },
   } satisfies WidgetSpec,
@@ -201,6 +235,7 @@ export default defineComponent({
     UnidentifiedResolver,
     BackgroundInfo,
     RelatedItems,
+    ItemEditor,
     RateLimiterState,
     CheckPositionCircle,
     ItemQuickPrice,
@@ -214,6 +249,19 @@ export default defineComponent({
     },
   },
   setup(props) {
+    watch(
+      () => props.config.usePseudo,
+      () => {
+        loadUltraLateItems(
+          (item) =>
+            Object.values(item.rune!).some((runeStat) =>
+              refEffectsPseudos(runeStat.string),
+            ) || HIGH_VALUE_RUNES_HARDCODED.has(item.refName),
+        );
+      },
+      { immediate: true },
+    );
+
     const wm = inject<WidgetManager>("wm")!;
     const {
       xchgRate,
@@ -230,6 +278,13 @@ export default defineComponent({
     const rebuildKey = shallowRef(2);
     const advancedCheck = shallowRef(false);
     const checkPosition = shallowRef({ x: 1, y: 1 });
+    const itemEditorOptions = ref<
+      { editing: boolean; value: string; disabled: boolean } | undefined
+    >({
+      editing: false,
+      value: "None",
+      disabled: true,
+    });
 
     MainProcess.onEvent("MAIN->CLIENT::item-text", (e) => {
       if (e.target !== "price-check") return;
@@ -289,14 +344,6 @@ export default defineComponent({
           rawText: e.clipboard,
         }));
       return newItem;
-    }
-
-    function changeItem(newItem: ParsedItem) {
-      item.value = handleItemPaste({
-        clipboard: newItem.rawText,
-        item: newItem,
-      });
-      rebuildKey.value += 1;
     }
 
     function handleIdentification(identified: ParsedItem) {
@@ -408,8 +455,22 @@ export default defineComponent({
       overlayKey,
       isLeagueSelected,
       openLeagueSelection,
-      changeItem,
       rebuildKey,
+      itemEditorAvailable: computed(() => {
+        if (!item.value?.isOk()) return false;
+        return getItemEditorType(item.value.value) !== ItemEditorType.None;
+      }),
+      handleItemEditorSelection: (
+        val:
+          | {
+              editing: boolean;
+              value: string;
+              disabled: boolean;
+            }
+          | undefined,
+      ) => (itemEditorOptions.value = val),
+      itemEditorOptions,
+      openItemEditorAbove: computed(() => props.config.openItemEditorAbove),
     };
   },
 });
