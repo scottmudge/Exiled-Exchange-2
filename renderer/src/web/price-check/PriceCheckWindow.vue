@@ -19,12 +19,12 @@
           'flex-row-reverse': clickPosition === 'stash',
         }"
       >
-        <rune-selector
-          v-if="runeSelectorPossible && !openRunesAbove && item?.isOk()"
+        <item-editor
+          v-if="itemEditorAvailable && !openItemEditorAbove && item?.isOk()"
           class="pointer-events-auto"
           :item="item.value"
           :click-position="clickPosition"
-          :show-rune-selector="showRuneSelector"
+          :item-editor-options="itemEditorOptions"
         />
       </div>
     </div>
@@ -33,16 +33,16 @@
       class="layout-column shrink-0 text-gray-200 pointer-events-auto"
       style="width: 28.75rem"
     >
-      <rune-selector
+      <item-editor
         v-if="
-          runeSelectorPossible &&
-          (isBrowserShown || openRunesAbove) &&
+          itemEditorAvailable &&
+          (isBrowserShown || openItemEditorAbove) &&
           item?.isOk()
         "
         class="pointer-events-auto"
         :item="item.value"
         :click-position="clickPosition"
-        :show-rune-selector="showRuneSelector"
+        :item-editor-options="itemEditorOptions"
       />
       <AppTitleBar
         @close="closePriceCheck"
@@ -104,9 +104,8 @@
             v-if="isLeagueSelected"
             :item="item.value"
             :advanced-check="advancedCheck"
-            :change-item="changeItem"
             :rebuild-key="rebuildKey"
-            @rune-selector="handleRuneSelector"
+            @item-editor-selection="handleItemEditorSelection"
           />
         </template>
         <div v-if="isBrowserShown" class="bg-gray-900 px-6 py-2 truncate">
@@ -179,10 +178,11 @@ import {
   WidgetManager,
   WidgetSpec,
 } from "../overlay/interfaces";
-import RuneSelector from "./filters/RuneSelector.vue";
-import { HIGH_VALUE_RUNES_HARDCODED, loadRunes } from "@/assets/data";
+import ItemEditor from "./filters/ItemEditor.vue";
+import { HIGH_VALUE_RUNES_HARDCODED, loadUltraLateItems } from "@/assets/data";
 import { refEffectsPseudos } from "./filters/pseudo";
-import { ARMOUR, WEAPON } from "@/parser/meta";
+import { ItemEditorType } from "@/parser/meta";
+import { getItemEditorType } from "./filters/util";
 
 type ParseError = {
   name: string;
@@ -225,7 +225,7 @@ export default defineComponent({
         tierNumbering: "poe2",
         alwaysShowTier: false,
         rememberRatio: false,
-        openRunesAbove: false,
+        openItemEditorAbove: false,
       };
     },
   } satisfies WidgetSpec,
@@ -235,7 +235,7 @@ export default defineComponent({
     UnidentifiedResolver,
     BackgroundInfo,
     RelatedItems,
-    RuneSelector,
+    ItemEditor,
     RateLimiterState,
     CheckPositionCircle,
     ItemQuickPrice,
@@ -252,7 +252,7 @@ export default defineComponent({
     watch(
       () => props.config.usePseudo,
       () => {
-        loadRunes(
+        loadUltraLateItems(
           (item) =>
             Object.values(item.rune!).some((runeStat) =>
               refEffectsPseudos(runeStat.string),
@@ -278,7 +278,7 @@ export default defineComponent({
     const rebuildKey = shallowRef(2);
     const advancedCheck = shallowRef(false);
     const checkPosition = shallowRef({ x: 1, y: 1 });
-    const showRuneSelector = ref<
+    const itemEditorOptions = ref<
       { editing: boolean; value: string; disabled: boolean } | undefined
     >({
       editing: false,
@@ -344,14 +344,6 @@ export default defineComponent({
           rawText: e.clipboard,
         }));
       return newItem;
-    }
-
-    function changeItem(newItem: ParsedItem) {
-      item.value = handleItemPaste({
-        clipboard: newItem.rawText,
-        item: newItem,
-      });
-      rebuildKey.value += 1;
     }
 
     function handleIdentification(identified: ParsedItem) {
@@ -463,17 +455,12 @@ export default defineComponent({
       overlayKey,
       isLeagueSelected,
       openLeagueSelection,
-      changeItem,
       rebuildKey,
-      runeSelectorPossible: computed(() => {
-        const cat = item.value?.unwrapOr(undefined)?.category;
-        const rarity = item.value?.unwrapOr(undefined)?.rarity;
-        if (cat === undefined || rarity === undefined) return false;
-        return (
-          (WEAPON.has(cat) || ARMOUR.has(cat)) && rarity !== ItemRarity.Unique
-        );
+      itemEditorAvailable: computed(() => {
+        if (!item.value?.isOk()) return false;
+        return getItemEditorType(item.value.value) !== ItemEditorType.None;
       }),
-      handleRuneSelector: (
+      handleItemEditorSelection: (
         val:
           | {
               editing: boolean;
@@ -481,9 +468,9 @@ export default defineComponent({
               disabled: boolean;
             }
           | undefined,
-      ) => (showRuneSelector.value = val),
-      showRuneSelector,
-      openRunesAbove: computed(() => props.config.openRunesAbove),
+      ) => (itemEditorOptions.value = val),
+      itemEditorOptions,
+      openItemEditorAbove: computed(() => props.config.openItemEditorAbove),
     };
   },
 });
