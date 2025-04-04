@@ -226,6 +226,7 @@ export default defineComponent({
         alwaysShowTier: false,
         rememberRatio: false,
         openItemEditorAbove: false,
+        openRunesAbove: false
       };
     },
   } satisfies WidgetSpec,

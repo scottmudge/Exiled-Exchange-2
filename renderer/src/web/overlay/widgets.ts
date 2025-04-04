@@ -59,6 +59,7 @@ export interface PriceCheckWidget extends Widget {
   alwaysShowTier: boolean;
   rememberRatio: boolean;
   openItemEditorAbove: boolean;
+  openRunesAbove: boolean;
 }
 
 export interface StopwatchWidget extends Widget {
