@@ -20,10 +20,14 @@ import { FilterGenerator } from "./filter-generator/FilterGenerator";
 if (!app.requestSingleInstanceLock()) {
   app.exit();
 }
-
-if (process.platform !== "darwin" || true) {
-  app.disableHardwareAcceleration();
-}
+// Disable hardware acceleration and force software rendering
+app.commandLine.appendSwitch("disable-gpu");
+app.commandLine.appendSwitch("disable-gpu-compositing");
+app.commandLine.appendSwitch("disable-accelerated-2d-canvas");
+app.commandLine.appendSwitch("disable-accelerated-video-decode");
+app.commandLine.appendSwitch("disable-accelerated-video-encode");
+app.commandLine.appendSwitch("disable-software-rasterizer");
+app.disableHardwareAcceleration();
 app.enableSandbox();
 let tray: AppTray;
 
